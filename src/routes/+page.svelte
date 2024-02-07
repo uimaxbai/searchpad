@@ -9,6 +9,7 @@
         width: 100%;
         overflow-x: hidden;
         .wrapper {
+            z-index: 1;
             $border: 1px solid lightgray;
             width: 100%;
             display: flex;
@@ -56,19 +57,39 @@
                 max-width: 500px;
                 margin-top: 0;
                 box-sizing: border-box;
+                display: none;
                 
                 ul {
+                    $selected-blue: #0d6efd;
+                    color: white;
                     list-style-type: none;
                     padding: 0;
                     margin: 0;
                     margin-top: 0;
-                    li:nth-child(1)::after {
-                        content: " ->";
-                        margin-right: 0.5em;
+                    li:nth-child(1) {
+                        background: $selected-blue!important;
+                        color: white;
+                        &::after {
+                            content: "";
+                            margin-left: .5em;
+                            background-image: url('/img/arrow-right-solid.svg');
+                            filter: invert(1);
+                            margin-right: 0.5em;
+                            width: 1em;
+                            height: 1em;
+                            display: inline-block;
+                            background-repeat: no-repeat;
+                        }
+                        &:hover {
+                            background: $selected-blue!important;
+                        }
                     }
                     li {
+                        display: flex;
+                        align-items: center;
                         padding: 0.5em;
                         cursor: pointer;
+                        color: black;
                         transition: background 0.2s;
                         &:hover {
                             background: #fcfcfc;
@@ -77,6 +98,14 @@
                 }
             
             }
+        }
+        .not-wrapper {
+            width: 100%;
+            height: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 0;
         }
     }
 
@@ -95,7 +124,9 @@
                 }
             }
             .suggestions {
-                color: white;
+                ul li {
+                    color: white!important;
+                }
                 ul li:hover {
                     background: #333!important;
                 }
@@ -104,20 +135,39 @@
     }
 </style>
 
+
+
 <main>
     <div class="wrapper">
         <div class="search">
             <img draggable="false" class="searchIcon" src="/img/magnifying-glass-solid.svg" alt="Search" />
-            <input class="searchInput" type="text" placeholder="Search" />
+            <input on:mousedown={searchKeyDown} on:keydown={searchKeyDown} id="searchInput" class="searchInput" type="text" placeholder="Search" />
         </div>
         <div class="suggestions">
             <ul>
                 <li>restaurants near me</li>
+                <li>trending videos</li>
             </ul>
         </div>
     </div>
+
+    <div class="not-wrapper" on:click={bodyClicked}></div>
 </main>
 
 <script lang="ts">
+    const searchKeyDown = (e: KeyboardEvent) => {
+        const suggestions = document.querySelector('.suggestions') as HTMLDivElement;
+        if (e.key === 'Enter') {
+            window.location.href="https://google.com/search?q=" + (document.getElementById('searchInput') as HTMLInputElement).value; // TODO change this
+        } else {
+            suggestions.style.display = 'block';
+        }
+    }
 
+    const bodyClicked = (e: MouseEvent) => {
+        const suggestions = document.querySelector('.suggestions') as HTMLDivElement;
+        if (e.target !== suggestions) {
+            suggestions.style.display = 'none';
+        }
+    }
 </script>
