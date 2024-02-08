@@ -106,6 +106,9 @@
             top: 0;
             left: 0;
             z-index: 0;
+            background: transparent;
+            border: none;
+
         }
     }
 
@@ -141,26 +144,42 @@
     <div class="wrapper">
         <div class="search">
             <img draggable="false" class="searchIcon" src="/img/magnifying-glass-solid.svg" alt="Search" />
-            <input on:mousedown={searchKeyDown} on:keydown={searchKeyDown} id="searchInput" class="searchInput" type="text" placeholder="Search" />
+            <input on:mousedown={searchKeyDown} on:keyup={searchKeyDown} id="searchInput" class="searchInput" type="text" placeholder="Search" />
         </div>
         <div class="suggestions">
             <ul>
-                <li>restaurants near me</li>
-                <li>trending videos</li>
+                {#each suggestionsArr as suggestion}
+                    <li>{suggestion}</li>
+                {/each}
             </ul>
         </div>
     </div>
 
-    <div class="not-wrapper" on:click={bodyClicked}></div>
+    <button class="not-wrapper" on:click={bodyClicked}></button>
 </main>
 
 <script lang="ts">
+    let suggestionsArr = [
+        "restaurants near me",
+        "trending videos"
+    ];
+    async function searchAutoComplete() {
+        const searchInput = document.getElementById('searchInput') as HTMLInputElement;
+        const suggestions = document.querySelector('.suggestions') as HTMLDivElement;
+        const res = await fetch(`/api/v1/autocomplete?q=${searchInput.value}`);
+        const data = await res.json();
+        return data;
+    }
     const searchKeyDown = (e: KeyboardEvent) => {
         const suggestions = document.querySelector('.suggestions') as HTMLDivElement;
         if (e.key === 'Enter') {
-            window.location.href="https://google.com/search?q=" + (document.getElementById('searchInput') as HTMLInputElement).value; // TODO change this
+            window.location.href="https://google.com/search?q=" + suggestionsArr[0]; // TODO change this
         } else {
             suggestions.style.display = 'block';
+            searchAutoComplete().then((data) => {
+                console.log(data);
+                suggestionsArr = data[1];
+            });
         }
     }
 
