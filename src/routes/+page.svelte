@@ -66,8 +66,8 @@
                     padding: 0;
                     margin: 0;
                     margin-top: 0;
-                    li:nth-child(1) {
-                        background: $selected-blue!important;
+                    :global(li.selected) {
+                        background: $selected-blue;
                         color: white;
                         &::after {
                             content: "";
@@ -84,6 +84,9 @@
                             background: $selected-blue!important;
                         }
                     }
+                    :global(li.selected a) {
+                        color: white!important;
+                    }
                     li {
                         display: flex;
                         align-items: center;
@@ -93,6 +96,12 @@
                         transition: background 0.2s;
                         &:hover {
                             background: #fcfcfc;
+                        }
+                        a {
+                            color: black;
+                            text-decoration: none;
+                            width: 100%;
+                            height: 100%;
                         }
                     }
                 }
@@ -113,11 +122,13 @@
     }
 
     @media (prefers-color-scheme: dark) {
+        
         main {
             background: #222;
             .wrapper {
                 border: 1px solid #333;
                 .search {
+                    border-bottom: 1px solid #333;
                     .searchIcon {
                         filter: invert(1);
                     }
@@ -127,7 +138,10 @@
                 }
             }
             .suggestions {
-                ul li {
+                li.selected {
+                    background: #0c5cd3!important;
+                }
+                ul li a {
                     color: white!important;
                 }
                 ul li:hover {
@@ -148,8 +162,8 @@
         </div>
         <div class="suggestions">
             <ul>
-                {#each suggestionsArr as suggestion}
-                    <li>{suggestion}</li>
+                {#each suggestionsArr as suggestion, i}
+                    <li class="suggestion{i}"><a href="https://google.com/search?q={suggestionsArr[i]}">{suggestion}</a></li>
                 {/each}
             </ul>
         </div>
@@ -159,26 +173,134 @@
 </main>
 
 <script lang="ts">
-    let suggestionsArr = [
-        "restaurants near me",
-        "trending videos"
-    ];
+    import { onMount } from 'svelte';
+
+    var currentlySelected = 0;
+    var history: string[] = [];
+    var websitesIndexed: {[key: string]: string} = {};
+    let suggestionsArr = [""];
+
+    onMount(() => {
+        const searchInput = document.getElementById('searchInput') as HTMLInputElement;
+        searchInput.focus();
+        // (document.querySelector('.suggestions') as HTMLDivElement).style.display = 'block';
+
+        document.querySelector(`.suggestion${currentlySelected}`)?.classList.add('selected');
+
+        if (localStorage.getItem("history") === null) {
+            localStorage.setItem("history", JSON.stringify([]));
+        }
+        else {
+            history = JSON.parse(localStorage.getItem("history") as string);
+            // console.log(history);
+        }
+    });
+
     async function searchAutoComplete() {
         const searchInput = document.getElementById('searchInput') as HTMLInputElement;
-        const suggestions = document.querySelector('.suggestions') as HTMLDivElement;
+        // const suggestions = document.querySelector('.suggestions') as HTMLDivElement;
         const res = await fetch(`/api/v1/autocomplete?q=${searchInput.value}`);
         const data = await res.json();
         return data;
     }
-    const searchKeyDown = (e: KeyboardEvent) => {
+    async function getTitleOfWebpage(site: string) {
+        const res = await fetch(`/api/v1/getTitle?site=${site}`);
+        const data = await res.json();
+        return data;
+    }
+
+    const searchKeyDown = (e: KeyboardEvent | MouseEvent) => {
         const suggestions = document.querySelector('.suggestions') as HTMLDivElement;
-        if (e.key === 'Enter') {
-            window.location.href="https://google.com/search?q=" + suggestionsArr[0]; // TODO change this
-        } else {
-            suggestions.style.display = 'block';
+        const searchInput = document.getElementById('searchInput') as HTMLInputElement;
+        if ((e as KeyboardEvent).key === 'Enter') {
+            history.push(suggestionsArr[currentlySelected]);
+            localStorage.setItem("history", JSON.stringify(history));
+            if (suggestionsArr[currentlySelected].includes(" (website")) {
+                var link = (suggestionsArr[currentlySelected]).match(/(?<=.*?\(website, ).*[^)]/)?.toString() || "";
+                // console.log(link);
+                window.location.href = link;
+            }
+            else {
+                window.location.href = `https://google.com/search?q=${suggestionsArr[currentlySelected]}`; // TODO change
+            }
+        } 
+        else if ((e as KeyboardEvent).key === 'ArrowDown') {
+            document.querySelector(`.suggestion${currentlySelected}`)?.classList.remove('selected');
+            currentlySelected += 1;
+            if (currentlySelected > suggestionsArr.length - 1) {
+                currentlySelected = 0;
+            }
+            document.querySelector(`.suggestion${currentlySelected}`)?.classList.add('selected');
+        }
+        else if ((e as KeyboardEvent).key === 'ArrowUp') {
+            document.querySelector(`.suggestion${currentlySelected}`)?.classList.remove('selected');
+            currentlySelected -= 1;
+            if (currentlySelected < 0) {
+                currentlySelected = suggestionsArr.length - 1;
+            }
+            document.querySelector(`.suggestion${currentlySelected}`)?.classList.add('selected');
+        }
+        else {
             searchAutoComplete().then((data) => {
-                console.log(data);
-                suggestionsArr = data[1];
+                suggestionsArr = ([searchInput.value]).concat(data[1]);
+                var relevance = data[4]["google:suggestrelevance"];
+                // console.log(relevance);
+                // console.log(suggestionsArr);
+                if (suggestionsArr[0] === "") {
+                    suggestions.style.display = 'none';
+                }
+                else {
+                    suggestions.style.display = 'block';
+                    if (relevance[0] > 700) {
+                        if (suggestionsArr[0].substring(0, 2) === searchInput.value.substring(0, 2) && searchInput.value.includes(suggestionsArr[0])) {
+                            suggestionsArr = suggestionsArr.slice(1, 2)
+                                                        .concat(suggestionsArr[0])
+                                                        .concat(suggestionsArr.slice(2));
+                        }
+                    }
+                    history.forEach((d) => {
+                        if (d.substring(0, 2) === searchInput.value.substring(0, 2) && d.includes(searchInput.value)) {
+                            suggestionsArr = ([d]).concat(suggestionsArr);
+                        }
+                        if (suggestionsArr.includes(d)) {
+                            suggestionsArr = suggestionsArr.filter((s) => s !== d);
+                            suggestionsArr = ([d]).concat(suggestionsArr);
+                        }
+                    });
+                    if (suggestionsArr.length > 7) {
+                        suggestionsArr = suggestionsArr.slice(0, 7);
+                    }
+                    suggestionsArr.forEach((d, i) => {
+                        if (d.includes("http")) {
+                            if (websitesIndexed.hasOwnProperty(d)) {
+                                suggestionsArr[i] = websitesIndexed[d] + " (website)";
+                            }
+                            else {
+                                getTitleOfWebpage(d).then((data) => {
+                                    var title = data.title;
+                                    if (title.length > 30) {
+                                        title = title.substring(0, 30) + "...";
+                                        while (title[-1] === " ") {
+                                            title = title.substring(0, 29) + "...";
+                                        }
+                                    }
+                                    title += " (website, " + d + ")"
+                                    suggestionsArr[i] = title;
+                                    websitesIndexed[d] = title;
+                                    suggestionsArr = suggestionsArr;
+                                });
+                            }
+                            /* getTitleOfWebpage(d).then((data) => {
+                                var title = data.title;
+                                if (title.length > 30) {
+                                    title = title.substring(0, 30) + "...";
+                                }
+                                suggestionsArr[i] = title + " (website)";
+                                websitesIndexed[d] = title;
+                            }); */
+                        }
+                    })
+                }
             });
         }
     }
