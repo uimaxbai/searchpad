@@ -6,8 +6,14 @@
         justify-content: center;
         align-items: center;
         height: 100vh;
-        width: 100%;
+        width: 100vw;
         overflow-x: hidden;
+        flex-direction: column;
+        padding: 1em;
+        .logo {
+            width: 100%;
+            max-width: 400px;
+        }
         .wrapper {
             z-index: 1;
             $border: 1px solid lightgray;
@@ -150,11 +156,13 @@
             }
         }
     }
+
 </style>
 
 
 
 <main>
+    <img src="/icons/main.png" alt="Searchpad Logo" loading="lazy" draggable="false" class="logo" />
     <div class="wrapper">
         <div class="search">
             <img draggable="false" class="searchIcon" src="/img/magnifying-glass-solid.svg" alt="Search" />
@@ -163,7 +171,7 @@
         <div class="suggestions">
             <ul>
                 {#each suggestionsArr as suggestion, i}
-                    <li class="suggestion{i}"><a href="https://google.com/search?q={suggestionsArr[i]}">{suggestion}</a></li>
+                    <li class="suggestion{i}"><a href={suggestion[1]}>{suggestion[0]}</a></li>
                 {/each}
             </ul>
         </div>
@@ -176,9 +184,10 @@
     import { onMount } from 'svelte';
 
     var currentlySelected = 0;
-    var history: string[] = [];
+    var history: Array<Array<string>> = [];
     var websitesIndexed: {[key: string]: string} = {};
-    let suggestionsArr = [""];
+    let suggestionsArr: Array<Array<string>> = [];
+    var searchLink = "https://google.com/search?q=";
 
     onMount(() => {
         const searchInput = document.getElementById('searchInput') as HTMLInputElement;
@@ -201,6 +210,7 @@
         // const suggestions = document.querySelector('.suggestions') as HTMLDivElement;
         const res = await fetch(`/api/v1/autocomplete?q=${searchInput.value}`);
         const data = await res.json();
+        // console.log(data);
         return data;
     }
     async function getTitleOfWebpage(site: string) {
@@ -213,16 +223,21 @@
         const suggestions = document.querySelector('.suggestions') as HTMLDivElement;
         const searchInput = document.getElementById('searchInput') as HTMLInputElement;
         if ((e as KeyboardEvent).key === 'Enter') {
-            history.push(suggestionsArr[currentlySelected]);
+            // console.log(suggestionsArr);
+            // TODO fix
+            console.log(history);
+            // console.log([suggestionsArr[currentlySelected][0], suggestionsArr[currentlySelected][1]]);
+            .// console.log(history.includes([suggestionsArr[currentlySelected][0], suggestionsArr[currentlySelected][1]]));
+            if (!history.includes([suggestionsArr[currentlySelected][0], suggestionsArr[currentlySelected][1]])) history.push([suggestionsArr[currentlySelected][0], suggestionsArr[currentlySelected][1]]);
             localStorage.setItem("history", JSON.stringify(history));
-            if (suggestionsArr[currentlySelected].includes(" (website")) {
+            /* if (suggestionsArr[currentlySelected].includes(" (website")) {
                 var link = (suggestionsArr[currentlySelected]).match(/(?<=.*?\(website, ).*[^)]/)?.toString() || "";
                 // console.log(link);
                 window.location.href = link;
             }
             else {
                 window.location.href = `https://google.com/search?q=${suggestionsArr[currentlySelected]}`; // TODO change
-            }
+            } */
         } 
         else if ((e as KeyboardEvent).key === 'ArrowDown') {
             document.querySelector(`.suggestion${currentlySelected}`)?.classList.remove('selected');
@@ -241,66 +256,38 @@
             document.querySelector(`.suggestion${currentlySelected}`)?.classList.add('selected');
         }
         else {
+            // Finally, we put results in
             searchAutoComplete().then((data) => {
-                suggestionsArr = ([searchInput.value]).concat(data[1]);
-                var relevance = data[4]["google:suggestrelevance"];
-                // console.log(relevance);
-                // console.log(suggestionsArr);
-                if (suggestionsArr[0] === "") {
-                    suggestions.style.display = 'none';
+                var suggestionLinks: Array<Array<string>> = []; 
+                // Push data into suggestion array
+                (data[1]).forEach((el: string) => {
+                    suggestionLinks.push([el, searchLink + el]);
+                });
+
+                // console.log(suggestionLinks);
+                suggestionsArr = suggestionLinks;
+
+                history.forEach((el) => {
+                    // console.log(el);
+                    if (el[0].includes(searchInput.value)) {
+                        suggestionsArr = ([el]).concat(suggestionsArr);
+                    }
+                });
+
+                // Prevent results from getting too big
+                if (suggestionsArr.length > 7) {
+                    suggestionsArr = suggestionsArr.slice(0, 7);
+                }
+
+                if (suggestionsArr.length > 0) {
+                    suggestions.style.display = 'block';
                 }
                 else {
-                    suggestions.style.display = 'block';
-                    if (relevance[0] > 700) {
-                        if (suggestionsArr[0].substring(0, 2) === searchInput.value.substring(0, 2) && searchInput.value.includes(suggestionsArr[0])) {
-                            suggestionsArr = suggestionsArr.slice(1, 2)
-                                                        .concat(suggestionsArr[0])
-                                                        .concat(suggestionsArr.slice(2));
-                        }
-                    }
-                    history.forEach((d) => {
-                        if (d.substring(0, 2) === searchInput.value.substring(0, 2) && d.includes(searchInput.value)) {
-                            suggestionsArr = ([d]).concat(suggestionsArr);
-                        }
-                        if (suggestionsArr.includes(d)) {
-                            suggestionsArr = suggestionsArr.filter((s) => s !== d);
-                            suggestionsArr = ([d]).concat(suggestionsArr);
-                        }
-                    });
-                    if (suggestionsArr.length > 7) {
-                        suggestionsArr = suggestionsArr.slice(0, 7);
-                    }
-                    suggestionsArr.forEach((d, i) => {
-                        if (d.includes("http")) {
-                            if (websitesIndexed.hasOwnProperty(d)) {
-                                suggestionsArr[i] = websitesIndexed[d] + " (website)";
-                            }
-                            else {
-                                getTitleOfWebpage(d).then((data) => {
-                                    var title = data.title;
-                                    if (title.length > 30) {
-                                        title = title.substring(0, 30) + "...";
-                                        while (title[-1] === " ") {
-                                            title = title.substring(0, 29) + "...";
-                                        }
-                                    }
-                                    title += " (website, " + d + ")"
-                                    suggestionsArr[i] = title;
-                                    websitesIndexed[d] = title;
-                                    suggestionsArr = suggestionsArr;
-                                });
-                            }
-                            /* getTitleOfWebpage(d).then((data) => {
-                                var title = data.title;
-                                if (title.length > 30) {
-                                    title = title.substring(0, 30) + "...";
-                                }
-                                suggestionsArr[i] = title + " (website)";
-                                websitesIndexed[d] = title;
-                            }); */
-                        }
-                    })
+                    suggestions.style.display = 'none';
                 }
+
+                // suggestionsArr = suggestionsArr;
+                // console.log(suggestionsArr);
             });
         }
     }
